@@ -98,6 +98,7 @@ Backend (`backend/.env`, see `backend/.env.example`):
 | `MONGO_URI`   | yes      | MongoDB connection string, e.g. `mongodb://127.0.0.1:27017/bitecloud` |
 | `JWT_SECRET`  | yes      | Long random string used to sign login tokens                    |
 | `PORT`        | no       | API port (default `5000`)                                       |
+| `HOST`        | no       | Bind address (default `127.0.0.1`; set `0.0.0.0` on Render or similar hosts) |
 | `CORS_ORIGIN` | no       | Comma-separated allowed browser origins (default `http://localhost:3000`) |
 
 Frontend (`frontend/.env`, see `frontend/.env.example`):

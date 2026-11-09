@@ -12,6 +12,8 @@ function required(name) {
 
 module.exports = {
   port: Number(process.env.PORT) || 5000,
+  // Loopback by default. Set HOST=0.0.0.0 only on a hosting platform (e.g. Render) that requires it.
+  host: process.env.HOST || '127.0.0.1',
   mongoURI: required('MONGO_URI'),
   jwtSecret: required('JWT_SECRET'),
   // Comma-separated list of allowed browser origins.

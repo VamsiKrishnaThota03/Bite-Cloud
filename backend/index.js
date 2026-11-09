@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { port, corsOrigins } = require('./config');
+const { port, host, corsOrigins } = require('./config');
 const mongoDB = require('./db');
 
 const app = express();
@@ -16,7 +16,7 @@ app.use('/api', require('./routes/CreateUser'));
 app.use('/api', require('./routes/DisplayData'));
 
 mongoDB().then(() => {
-  app.listen(port, () => {
-    console.log(`Server is running on ${port}`);
+  app.listen(port, host, () => {
+    console.log(`Server is running on http://${host}:${port}`);
   });
 });

@@ -1,17 +1,14 @@
 const mongoose = require('mongoose');
-// const { collection } = require('./models/User');
-const mongoURI = 'mongodb+srv://vamsikrishna:Tvkrishna%401@cluster0.mwhyaca.mongodb.net/?retryWrites=true&w=majority'
-var database;
+const { mongoURI } = require('./config');
 
-const mongoDB = async() =>{
-    await mongoose.connect(mongoURI,{
-        useNewUrlParser: true,
-        useUnifiedTopology:true
-    }).then(()=>{
-        console.log(`Connected`);
-    }).catch(err=>{
-        console.log(err);
-    })
-}
+const mongoDB = async () => {
+  try {
+    await mongoose.connect(mongoURI);
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.error('MongoDB connection failed:', err.message);
+    process.exit(1);
+  }
+};
 
 module.exports = mongoDB;

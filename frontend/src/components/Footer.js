@@ -1,19 +1,14 @@
 import React from 'react';
-import {Link} from 'react-router-dom';
 
 function Footer() {
   return (
-    <div>
-      <footer className="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
-    <div className="col-md-4 d-flex align-items-center">
-      <Link to="/" className="mb-3 me-2 mb-md-0 text-muted text-decoration-none lh-1">
-      </Link>
-      <span className="text-muted">© 2023 GoFood, Inc</span>
-    </div>
-
-  </footer>
-    </div>
-  )
+    <footer className="bc-footer py-4 mt-5">
+      <div className="container d-flex flex-wrap justify-content-between gap-2 small text-body-secondary">
+        <span>© {new Date().getFullYear()} Bite-Cloud</span>
+        <span>Fresh food, delivered warm.</span>
+      </div>
+    </footer>
+  );
 }
 
-export default Footer
+export default Footer;

@@ -1,84 +1,60 @@
-import React,{useState} from 'react';
-import {Link,useNavigate} from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import AuthLayout from './AuthLayout';
+import { apiRequest, errorMessage } from '../api';
 
 function Login() {
-  const [credentials,setcredentials] = useState({email:"",password:""});
-let navigate = useNavigate();
-    let name,value;
+  const [credentials, setCredentials] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
-    const handleSubmit = async(e) =>{
-        e.preventDefault();
-        const {email,password} = credentials;
-        const response = await fetch('http://localhost:5000/api/loginuser',{
-            method:'POST',
-            headers:{
-                'Content-Type':'application/json'
-            },
-            body:JSON.stringify({email,password})
-        })
-        const json = await response.json();
-        console.log(json);
-
-        if(!json.success){
-          alert("Enter valid credentials")
-        }else{
-          localStorage.setItem("authToken",json.authToken);
-          console.log(localStorage.getItem("authToken"));
-          navigate('/');
-        }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const json = await apiRequest('/api/loginuser', { method: 'POST', body: credentials });
+      if (!json || !json.success) {
+        setError(errorMessage(json, 'Invalid email or password'));
+      } else {
+        localStorage.setItem('authToken', json.authToken);
+        navigate('/');
+      }
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    const onChange=(event)=>{
-      name = event.target.name;
-      value = event.target.value;
-        setcredentials({...credentials,[name]:value})
-    }
+  const onChange = (event) => setCredentials({ ...credentials, [event.target.name]: event.target.value });
 
   return (
-    <>
-          <div className="container">
-      <form method="POST">
-        <div className="mb-3">
-          <label htmlFor="exampleInputEmail1" className="form-label">
-            Email address
-          </label>
-          <input
-            type="email"
-            className="form-control"
-            id="exampleInputEmail1"
-            aria-describedby="emailHelp"
-            name="email"
-            autoComplete="off"
-            value={credentials.email}
-            onChange={onChange}
-          />
-          <div id="emailHelp" className="form-text">
-            We'll never share your email with anyone else.
+    <AuthLayout title="Welcome back" subtitle="Log in to start adding dishes to your cart.">
+      <form onSubmit={handleSubmit} noValidate>
+        {error && (
+          <div className="alert alert-danger py-2" role="alert">
+            {error}
           </div>
-        </div>
+        )}
         <div className="mb-3">
-          <label htmlFor="exampleInputPassword1" className="form-label">
-            Password
-          </label>
-          <input
-            type="password"
-            className="form-control"
-            id="exampleInputPassword1"
-            name="password"
-            autoComplete="off"
-            value={credentials.password}
-            onChange={onChange}
-          />
+          <label htmlFor="email" className="form-label">Email address</label>
+          <input type="email" className="form-control" id="email" name="email" autoComplete="email" required value={credentials.email} onChange={onChange} />
         </div>
-        
-        <input type="submit" className="m-3 btn btn-primary" value='Login' onClick={handleSubmit} />
-        <Link to='/createuser' className='m-3 btn btn-danger'>I'm a new user</Link>
-
+        <div className="mb-4">
+          <label htmlFor="password" className="form-label">Password</label>
+          <input type="password" className="form-control" id="password" name="password" autoComplete="current-password" required value={credentials.password} onChange={onChange} />
+        </div>
+        <button type="submit" className="btn btn-success w-100 mb-3" disabled={submitting}>
+          {submitting ? 'Logging in…' : 'Log in'}
+        </button>
+        <p className="text-center small text-body-secondary mb-0">
+          New here? <Link to="/createuser">Create an account</Link>
+        </p>
       </form>
-
-    </div>
-    </>
-  )
+    </AuthLayout>
+  );
 }
 
-export default Login
+export default Login;

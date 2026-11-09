@@ -1,105 +1,69 @@
-import React,{useState} from "react";
-import {Link} from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import AuthLayout from './AuthLayout';
+import { apiRequest, errorMessage } from '../api';
 
-const Signup=()=> {
-    const [credentials,setcredentials] = useState({name:"",email:"",password:"",location:""});
+const Signup = () => {
+  const [credentials, setCredentials] = useState({ name: '', email: '', password: '', location: '' });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
-    let name,value;
-
-    const handleSubmit = async(e) =>{
-        e.preventDefault();
-        const {name,email,password,location} = credentials;
-        const response = await fetch('http://localhost:5000/api/createUser',{
-            method:'POST',
-            headers:{
-                'Content-Type':'application/json'
-            },
-            body:JSON.stringify({name,email,password,location})
-        })
-        const json = await response.json();
-        console.log(json);
-
-        if(!json.success){
-          alert("Enter valid credentials")
-        }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const json = await apiRequest('/api/createUser', { method: 'POST', body: credentials });
+      if (!json || !json.success) {
+        setError(errorMessage(json));
+      } else {
+        navigate('/login');
+      }
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    const onChange=(event)=>{
-      name = event.target.name;
-      value = event.target.value;
-        setcredentials({...credentials,[name]:value})
-    }
+  const onChange = (event) => setCredentials({ ...credentials, [event.target.name]: event.target.value });
 
   return (
-    <>
-    <div className="container">
-      <form method="POST">
-        <div className="mb-3">
-          <label htmlFor="name" className="form-label">
-            Name
-          </label>
-          <input
-            type="text"
-            className="form-control"
-            name="name"
-            autoComplete="off"
-            value={credentials.name}
-            onChange={onChange}
-          />
-        </div>
-        <div className="mb-3">
-          <label htmlFor="exampleInputEmail1" className="form-label">
-            Email address
-          </label>
-          <input
-            type="email"
-            className="form-control"
-            id="exampleInputEmail1"
-            aria-describedby="emailHelp"
-            name="email"
-            autoComplete="off"
-            value={credentials.email}
-            onChange={onChange}
-          />
-          <div id="emailHelp" className="form-text">
-            We'll never share your email with anyone else.
+    <AuthLayout title="Create your account" subtitle="It takes less than a minute.">
+      <form onSubmit={handleSubmit} noValidate>
+        {error && (
+          <div className="alert alert-danger py-2" role="alert">
+            {error}
           </div>
+        )}
+        <div className="mb-3">
+          <label htmlFor="name" className="form-label">Name</label>
+          <input type="text" className="form-control" id="name" name="name" autoComplete="name" required value={credentials.name} onChange={onChange} />
         </div>
         <div className="mb-3">
-          <label htmlFor="exampleInputPassword1" className="form-label">
-            Password
-          </label>
-          <input
-            type="password"
-            className="form-control"
-            id="exampleInputPassword1"
-            name="password"
-            autoComplete="off"
-            value={credentials.password}
-            onChange={onChange}
-          />
+          <label htmlFor="email" className="form-label">Email address</label>
+          <input type="email" className="form-control" id="email" name="email" autoComplete="email" aria-describedby="emailHelp" required value={credentials.email} onChange={onChange} />
+          <div id="emailHelp" className="form-text">We&apos;ll never share your email with anyone else.</div>
         </div>
         <div className="mb-3">
-          <label htmlFor="exampleInputPassword1" className="form-label">
-            Address
-          </label>
-          <input
-            type="text"
-            className="form-control"
-            id="exampleInputPassword1"
-            name="location"
-            autoComplete="off"
-            value={credentials.location}
-            onChange={onChange}
-          />
+          <label htmlFor="password" className="form-label">Password</label>
+          <input type="password" className="form-control" id="password" name="password" autoComplete="new-password" aria-describedby="passwordHelp" required minLength={5} value={credentials.password} onChange={onChange} />
+          <div id="passwordHelp" className="form-text">At least 5 characters.</div>
         </div>
-        <input type="submit" className="m-3 btn btn-primary" value='register' onClick={handleSubmit} />
-        <Link to='/login' className='m-3 btn btn-danger'>Already a user</Link>
+        <div className="mb-4">
+          <label htmlFor="location" className="form-label">Delivery address</label>
+          <input type="text" className="form-control" id="location" name="location" autoComplete="street-address" required value={credentials.location} onChange={onChange} />
+        </div>
+        <button type="submit" className="btn btn-success w-100 mb-3" disabled={submitting}>
+          {submitting ? 'Creating account…' : 'Sign up'}
+        </button>
+        <p className="text-center small text-body-secondary mb-0">
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
       </form>
-
-    </div>
-    </>
+    </AuthLayout>
   );
-}
+};
 
 export default Signup;

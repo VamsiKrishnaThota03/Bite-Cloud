@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+beforeEach(() => {
+  global.fetch = jest.fn(() => new Promise(() => {}));
+});
+
+test('renders the brand and the menu loading state', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getAllByText(/Bite-Cloud/i).length).toBeGreaterThan(0);
+  expect(screen.getByRole('status')).toHaveTextContent(/loading the menu/i);
 });

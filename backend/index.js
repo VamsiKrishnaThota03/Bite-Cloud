@@ -1,22 +1,36 @@
-const express = require('express');
-const cors = require('cors');
-const { port, host, corsOrigins } = require('./config');
+const mongoose = require('mongoose');
+const { port, host } = require('./config');
 const mongoDB = require('./db');
+const { createApp } = require('./app');
 
-const app = express();
+mongoDB()
+  .then(() => {
+    const server = createApp().listen(port, host, () => {
+      console.log(`Server is running on http://${host}:${port}`);
+    });
 
-app.use(cors({ origin: corsOrigins }));
-app.use(express.json());
+    // Drain in-flight requests and close the Mongo connection when the
+    // platform replaces the container, so a deploy does not surface as 502s or
+    // leaked connections.
+    const shutdown = (signal) => {
+      console.log(`${signal} received, shutting down`);
+      server.close(async () => {
+        try {
+          await mongoose.connection.close();
+        } catch {
+          // Already closed; nothing useful to do here.
+        }
+        process.exit(0);
+      });
+      setTimeout(() => process.exit(1), 10_000).unref();
+    };
 
-app.get('/', (req, res) => {
-  res.send('Bite-Cloud API is running');
-});
-
-app.use('/api', require('./routes/CreateUser'));
-app.use('/api', require('./routes/DisplayData'));
-
-mongoDB().then(() => {
-  app.listen(port, host, () => {
-    console.log(`Server is running on http://${host}:${port}`);
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+  })
+  // mongoDB() exits on failure, but an unhandled rejection here would have been
+  // silent; this makes any other startup error explicit.
+  .catch((err) => {
+    console.error('Failed to start:', err.message);
+    process.exit(1);
   });
-});

@@ -7,6 +7,10 @@ A MERN food ordering app: browse a categorized menu stored in MongoDB, search di
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
 
+[![CI](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/codeql.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ![Menu](docs/screenshots/home.png)
 
 | Cart | Mobile |
@@ -121,3 +125,82 @@ Frontend (`frontend/.env`, see `frontend/.env.example`):
 - The JWT is stored in `localStorage` and is not yet required by any API route.
 - Dish images are hot-linked from Unsplash, iStock and Pixabay. One sample image no longer loads and shows a placeholder.
 - `npm audit` still reports issues in Create React App's build tooling (`react-scripts` 5) that can only be fixed with a breaking upgrade.
+
+
+## Hardening, testing and operations
+
+The backend is split into `app.js` (the Express application) and `index.js`
+(connect, bind, shut down), so tests can drive the app on an ephemeral loopback
+port instead of the real one.
+
+Fixed in the process:
+
+- **No 404 handler and no error handler.** An unknown path and a malformed JSON
+  body both produced Express's default HTML error page, from an API that returns
+  JSON everywhere else. Both now return JSON, and a malformed body is a 400.
+- **`express.json()` had no size limit**, so one request could stream an
+  arbitrarily large body into memory. Capped at 100 kB, with a 413 when exceeded.
+- **`app.disable('x-powered-by')` was missing**, so responses advertised Express.
+- **`mongoDB().then(...)` had no `.catch()`**, so any startup error other than
+  the one `db.js` handles itself would have been a silent unhandled rejection.
+
+Added:
+
+- **helmet** with a deny-all CSP (this is a JSON API; nothing is ever loaded
+  from it as a subresource), `nosniff` and `no-referrer`.
+- **Rate limiting**: a global ceiling, plus a tighter limiter on the two
+  credential routes keyed on IP **plus the submitted email**, so one attacker
+  behind a shared address cannot lock out everyone else. Successes count as well
+  as failures, so a valid login cannot refill the budget. The public menu route
+  is deliberately *not* behind the auth limiter — there is a test for that.
+  `trust proxy` is set to exactly one hop, so `X-Forwarded-For` cannot be
+  spoofed to bypass the limits.
+- **Split health probes.** `GET /api/health` is liveness and never touches
+  Mongo, so a database blip cannot cause a restart loop. `GET /api/health/ready`
+  reports Mongoose's connection state and answers 503 with `Retry-After`.
+- **Graceful shutdown** on SIGTERM/SIGINT that drains requests then closes Mongo.
+
+### Tests
+
+```bash
+cd backend
+npm test              # 13 tests, no database needed
+npm run test:coverage
+```
+
+They cover the liveness/readiness split, the security headers, the JSON 404 and
+400 paths, the 413 on an oversized body, full validation on register and login,
+the auth limiter firing and keying per email, and that the public menu stays
+reachable while the credential routes are limited.
+
+### Continuous integration
+
+| Job | What it proves |
+| --- | --- |
+| `backend` (Node 20, 22) | The 13-test suite, with coverage on 20 |
+| `integration` | Against MongoDB 7: reads `ss -ltn` to confirm no `0.0.0.0` listener by default, readiness turns green, the menu seeds and serves anonymously, register/login round-trip, no password hash in any response, clean `SIGTERM`, and `HOST=0.0.0.0` still honoured |
+| `frontend` | Jest + Testing Library tests and a production build |
+| `docker` | The image builds and refuses to start with no configuration |
+
+CodeQL runs weekly and on every push; Dependabot groups weekly patch/minor
+bumps per package.
+
+### Docker
+
+```bash
+printf 'MONGO_PASSWORD=%s\nJWT_SECRET=%s\n' \
+  "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" > .env
+
+docker compose up --build
+docker compose exec api node seed.js   # load the menu
+```
+
+MongoDB and the API both publish to `127.0.0.1` only, so neither is reachable
+from your network, and Compose fails fast with a named error if either variable
+is missing.
+
+### Known limitations
+
+- Rate limit counters live in process memory, so the ceilings are per instance.
+  Scaling past one would need a shared store (Redis).
+- The cart is client-side only; there is no order persistence or checkout.

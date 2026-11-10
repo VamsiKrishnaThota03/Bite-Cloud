@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - name: Test
+        run: npm test
+
+      - name: Coverage
+        if: matrix.node == '20'
+        run: npm run test:coverage
+
+  integration:
+    name: integration against real MongoDB
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      MONGO_URI: mongodb://127.0.0.1:27017/bitecloud_test
+      JWT_SECRET: ci-only-secret-never-used-in-a-deployment
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+
+      - name: Bind, probes, register/login round trip and clean SIGTERM
+        env:
+          PORT: '5000'
+        run: |
+          set -euo pipefail
+          node index.js > server.log 2>&1 & SERVER_PID=$!
+
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:5000/api/health > /dev/null && break
+            sleep 1
+          done
+
+          echo "--- listening sockets on 5000 ---"
+          ss -ltn 2>/dev/null | grep ':5000' || true
+
+          # config.js defaults HOST to 127.0.0.1; prove it on the real socket.
+          if ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*):5000'; then
+            echo "::error::server is listening on all interfaces by default"
+            exit 1
+          fi
+          ss -ltn 2>/dev/null | grep -q '127.0.0.1:5000' \
+            || { echo "::error::no loopback listener found"; ss -ltn; exit 1; }
+
+          curl -fsS http://127.0.0.1:5000/api/health/ready \
+            | tee /dev/stderr | grep -q '"database":"connected"'
+
+          # Seed the menu, then confirm the public route serves it anonymously.
+          node seed.js
+          curl -fsS http://127.0.0.1:5000/api/foodData > menu.json
+          # The route returns [items, categories], so check both are populated
+          # rather than just that the outer array exists.
+          node -e "
+            const d = require('./menu.json');
+            if (!Array.isArray(d) || d.length !== 2) {
+              console.error('expected [items, categories], got', JSON.stringify(d).slice(0, 200));
+              process.exit(1);
+            }
+            const [items, categories] = d;
+            if (!items.length || !categories.length) {
+              console.error('menu empty: ' + items.length + ' items, ' + categories.length + ' categories');
+              process.exit(1);
+            }
+            console.log('menu served: ' + items.length + ' items, ' + categories.length + ' categories');
+          "
+
+          email="ci-$(date +%s)@example.test"
+          reg=$(curl -s -o reg.json -w '%{http_code}' -X POST http://127.0.0.1:5000/api/createUser \
+            -H 'Content-Type: application/json' \
+            -d "{\"name\":\"CI User\",\"email\":\"$email\",\"password\":\"correct-horse\",\"location\":\"Testville\"}")
+          cat reg.json
+          test "$reg" = "200" || { echo "::error::register returned $reg"; cat server.log; exit 1; }
+
+          curl -fsS -X POST http://127.0.0.1:5000/api/loginuser \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"correct-horse\"}" > login.json
+          cat login.json
+          grep -q 'authToken' login.json || { echo "::error::login returned no token"; exit 1; }
+
+          # The password hash must never appear in a response.
+          if grep -q '"password"' reg.json login.json; then
+            echo "::error::password field returned by an auth endpoint"
+            exit 1
+          fi
+
+          kill -TERM $SERVER_PID
+          for i in $(seq 1 15); do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then echo "exited cleanly"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::server did not shut down on SIGTERM"
+          exit 1
+
+      - name: HOST=0.0.0.0 is still honoured for container hosting
+        env:
+          PORT: '5002'
+          HOST: 0.0.0.0
+        run: |
+          set -euo pipefail
+          node index.js > server2.log 2>&1 & SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:5002/api/health > /dev/null && break
+            sleep 1
+          done
+          ss -ltn 2>/dev/null | grep -qE '(0\.0\.0\.0|\*):5002' \
+            || { echo "::error::HOST override was ignored"; ss -ltn; exit 1; }
+          echo "HOST override works"
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test -- --watchAll=false
+        env:
+          CI: 'true'
+
+      - name: Build
+        run: npm run build
+        env:
+          CI: 'true'
+          DISABLE_ESLINT_PLUGIN: 'true'
+
+  docker:
+    name: backend image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: bite-cloud-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image refuses to start without its secrets
+        run: |
+          set +e
+          output=$(docker run --rm bite-cloud-backend:ci 2>&1)
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0 || { echo "::error::started with no configuration"; exit 1; }
+          echo "$output" | grep -qE "MONGO_URI|JWT_SECRET" \
+            || { echo "::error::expected a missing-configuration error"; exit 1; }

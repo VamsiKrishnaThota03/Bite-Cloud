@@ -7,8 +7,8 @@ A MERN food ordering app: browse a categorized menu stored in MongoDB, search di
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
 
-[![CI](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/codeql.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/Bite-Cloud/actions/workflows/codeql.yml)
+[![CI](https://github.com/VamsiKrishnaThota03/bite-cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/bite-cloud/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/VamsiKrishnaThota03/bite-cloud/actions/workflows/codeql.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/bite-cloud/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Menu](docs/screenshots/home.png)
